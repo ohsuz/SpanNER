@@ -39,7 +39,7 @@ param_name=epoch${max_epochs}_batchsize${batchSize}_lr${LR}_maxlen${MAXLEN}
 OUTPUT_DIR="/home/jlfu/spanner/train_logs/$dataname/${modelName}"
 #mkdir -p $OUTPUT_DIR
 
-nohup python trainer.py \
+python trainer.py \
 --dataname $dataname \
 --data_dir $DATA_DIR \
 --bert_config_dir $BERT_DIR \

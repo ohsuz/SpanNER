@@ -3,7 +3,7 @@
 
 import argparse
 import os
-# from collections import namedtuple
+from collections import namedtuple
 from typing import Dict
 
 import pytorch_lightning as pl
@@ -30,6 +30,20 @@ logger = logging.getLogger(__name__)
 set_random_seed(0)
 
 import pickle
+
+import urllib
+from transformers import AutoTokenizer
+
+
+def download_vocab_files_for_tokenizer(tokenizer, model_type, output_path):
+    vocab_files_map = tokenizer.pretrained_vocab_files_map
+    vocab_files = {}
+    for resource in vocab_files_map.keys():
+        download_location = vocab_files_map[resource][model_type]
+        f_path = os.path.join(output_path, os.path.basename(download_location))
+        urllib.request.urlretrieve(download_location, f_path)
+        vocab_files[resource] = f_path
+    return vocab_files
 
 
 class BertNerTagger(pl.LightningModule):
@@ -225,15 +239,6 @@ class BertNerTagger(pl.LightningModule):
         predict = self.classifier(all_span_rep) # shape: (bs, n_span, n_class)
 
         return loss
-
-
-
-
-
-
-
-
-
 
     def training_step(self, batch, batch_idx):
         """"""
@@ -470,12 +475,19 @@ class BertNerTagger(pl.LightningModule):
         #                         max_length=self.args.bert_max_length,
         #                         pad_to_maxlen=False
         #                         )
+        vocab_save_path = os.path.join(os.getcwd(), 'vocab')
+        if not os.path.exists(vocab_save_path):
+            os.makedirs(vocab_save_path)
+        hf_tokenizer = AutoTokenizer.from_pretrained(self.bert_dir)
+        vocab_files = download_vocab_files_for_tokenizer(hf_tokenizer, self.bert_dir, './vocab/')
+        tokenizer = BertWordPieceTokenizer(vocab_files.get('vocab_file'), vocab_files.get('merges_file'))
 
-        vocab_path = os.path.join(self.bert_dir, "vocab.txt")
+        #vocab_path = os.path.join(self.bert_dir, "vocab.txt")
         print("use BertWordPieceTokenizer as the tokenizer ")
         dataset = BERTNERDataset(self.args, json_path=json_path,
-                                 tokenizer=BertWordPieceTokenizer(vocab_path),
+                                 # tokenizer=BertWordPieceTokenizer(vocab_path),
                                  # tokenizer=BertWordPieceTokenizer(vocab_file=vocab_path),
+                                 tokenizer=tokenizer,
                                  max_length=self.args.bert_max_length,
                                  pad_to_maxlen=False
                                  )
@@ -526,6 +538,8 @@ def main():
                      'tvshow':8,'musicartist':9,'sportsteam':10}
     elif args.dataname == 'wnut17':
         label2idx = {'O': 0,'location':1, 'group':2,'corporation':3,'person':4,'creative-work':5,'product':6}
+    elif args.dataname == 'bionlp2004':
+        label2idx = {'O': 0, 'DNA': 1, 'protein': 2, 'cell_type': 3, 'cell_line': 4, 'RNA': 5}
 
     label2idx_list = []
     for lab, idx in label2idx.items():
@@ -577,6 +591,8 @@ def main():
         period=-1,
         mode="max",
     )
+    print('here')
+
     trainer = Trainer.from_argparse_args(
         args,
         checkpoint_callback=checkpoint_callback
